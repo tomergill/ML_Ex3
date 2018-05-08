@@ -1,11 +1,18 @@
 import numpy as np
+from numpy import tanh
 from random import shuffle
 from time import time
 
 
-def load_data_from_files(x_file, y_file, validation=False, validation_size=0.2):
+def load_data_from_files(x_file, y_file, validation=False, validation_size=0.2, shuffle=True):
     x = np.loadtxt(x_file)
     y = np.loadtxt(y_file)
+
+    if shuffle:
+        yy = y.reshape(-1, 1)
+        data = np.concatenate((x, yy), axis=1)
+        np.random.shuffle(data)
+        x, y = data[:, :-1], data[:, -1]
 
     if not validation:
         return x, y
@@ -17,7 +24,9 @@ def load_data_from_files(x_file, y_file, validation=False, validation_size=0.2):
 
 
 def initialize_weight(size1, size2=None):
-    return np.random.rand(size1, size2) if size2 is not None else np.random.rand(size1)
+    n, m = size1, 1 if size2 is None else size2
+    eps = np.sqrt(6.0 / (n + m))
+    return np.random.uniform(-eps, eps, (size1, size2)) if size2 is not None else np.random.uniform(-eps, eps, size1)
 
 
 def softmax(x):
@@ -37,6 +46,7 @@ def sigmoid(x):
 
 
 def det_sigmoid(x):
+    x = sigmoid(x)
     return x * (1 - x)
 
 
@@ -55,10 +65,10 @@ def det_ReLU(x):
 
 
 def det_tanh(x):
-    return 1 - np.square(np.tanh(x))
+    return 1 - np.square(tanh(x))
 
 
-func_to_derivative = {sigmoid: det_sigmoid, ReLU: det_ReLU, np.tanh: det_tanh}
+func_to_derivative = {sigmoid: det_sigmoid, ReLU: det_ReLU, tanh: det_tanh}
 
 
 def neglogloss(probs, y):
@@ -148,18 +158,19 @@ def train(net, train_x, train_y, epochs, lr, dev_x, dev_y):
     print "| epoch | train loss | dev loss | accuracy | epoch time |"
     print "+-------+------------+----------+----------+------------+"
 
+    indices = range(train_x.shape[0])
     for i in xrange(epochs):
         start = time()
         total_loss = 0.0
-        indices = range(train_x.shape[0])
+
         shuffle(indices)
         for j in indices:
-            x, y = train_x[i], int(train_y[j])
+            x, y = train_x[j], int(train_y[j])
             loss, gW1, gb1, gW2, gb2 = net.backprop(x, y)
             total_loss += loss
             net.update_weights(lr, gW1, gb1, gW2, gb2)
         avg_loss, acc = dev_loss_and_accuracy(net, dev_x, dev_y)
-        print "| {:5} | {:10f} | {:7f} | {:5f}% | {:8f}s |".format(i, total_loss / len(indices), avg_loss, acc * 100,
+        print "| {:5} | {:10f} | {:7f} | {:5.3f}% | {:8f}s |".format(i, total_loss / len(indices), avg_loss, acc * 100,
                                                                    time() - start)
     print "+-------+------------+----------+----------+------------+"
 
@@ -174,9 +185,9 @@ def predict_to_file(net, test_x, file_name):
 
 def main():
     # Hyper-parameters
-    hidden_size = 16
-    learning_rate = 0.5
-    epochs = 30
+    hidden_size = 200  # 128  200 even better (89.518 over 20)
+    learning_rate = 0.01
+    epochs = 20
     activ_func = sigmoid
 
     # Load Data
