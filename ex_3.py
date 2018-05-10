@@ -18,15 +18,30 @@ def load_data_from_files(x_file, y_file, validation=False, validation_size=0.2, 
         return x, y
 
     dev_size = int(x.shape[0] * validation_size)
-    train_x, dev_x = x[:-dev_size, :], x[-dev_size:, :]
-    train_y, dev_y = y[:-dev_size], y[-dev_size:]
+    unique, times = np.unique(y, return_counts=True)
+    examples_per_tag = (times * dev_size / float(y.shape[0])).astype(np.int)
+    counters = [0] * 10
+    train_indices, dev_indices = [], []
+
+    for i in xrange(y.shape[0]):
+        tag = int(y[i])
+        if counters[tag] < examples_per_tag[tag]:
+            counters[tag] += 1
+            dev_indices.append(i)
+        else:
+            train_indices.append(i)
+
+    train_x, dev_x = x[train_indices], x[dev_indices]
+    train_y, dev_y = y[train_indices], y[dev_indices]
     return train_x, train_y, dev_x, dev_y
 
 
 def initialize_weight(size1, size2=None):
-    n, m = size1, 1 if size2 is None else size2
-    eps = np.sqrt(6.0 / (n + m))
-    return np.random.uniform(-eps, eps, (size1, size2)) if size2 is not None else np.random.uniform(-eps, eps, size1)
+    # n, m = size1, 1 if size2 is None else size2
+    # eps = np.sqrt(6.0 / (n + m))
+    # return np.random.uniform(-eps, eps, (size1, size2)) if size2 is not None else np.random.uniform(-eps, eps, size1)
+    return  np.random.uniform(-0.08, 0.08, (size1, size2)) if size2 is not None else np.random.uniform(-0.08, 0.08,
+                                                                                                      size1)
 
 
 def softmax(x):
@@ -120,6 +135,9 @@ class MLP1:
         self.W2 -= lr * gW2
         self.b2 -= lr * gb2
 
+    def set_params(self, params):
+        self.W1, self.b1, self.W2, self.b2 = params
+
 
 def dev_loss_and_accuracy(net, dev_x, dev_y):
     """
@@ -158,6 +176,9 @@ def train(net, train_x, train_y, epochs, lr, dev_x, dev_y):
     print "| epoch | train loss | dev loss | accuracy | epoch time |"
     print "+-------+------------+----------+----------+------------+"
 
+    best_params = []
+    best_acc = 0
+
     indices = range(train_x.shape[0])
     for i in xrange(epochs):
         start = time()
@@ -170,9 +191,14 @@ def train(net, train_x, train_y, epochs, lr, dev_x, dev_y):
             total_loss += loss
             net.update_weights(lr, gW1, gb1, gW2, gb2)
         avg_loss, acc = dev_loss_and_accuracy(net, dev_x, dev_y)
-        print "| {:5} | {:10f} | {:7f} | {:5.3f}% | {:8f}s |".format(i, total_loss / len(indices), avg_loss, acc * 100,
+        if acc >= best_acc:
+            best_acc = acc
+            best_params = [net.W1.copy(), net.b1.copy(), net.W2.copy(), net.b2.copy()]
+        print "| {:^5} | {:010f} | {:7f} | {:6.4f}% | {:8f}s |".format(i, total_loss / len(indices), avg_loss,
+                                                                       acc * 100,
                                                                    time() - start)
     print "+-------+------------+----------+----------+------------+"
+    return best_params, best_acc
 
 
 def predict_to_file(net, test_x, file_name):
@@ -186,8 +212,8 @@ def predict_to_file(net, test_x, file_name):
 def main():
     # Hyper-parameters
     hidden_size = 200  # 128  200 even better (89.518 over 20)
-    learning_rate = 0.01
-    epochs = 20
+    learning_rate = 0.02
+    epochs = 30
     activ_func = sigmoid
 
     # Load Data
@@ -201,7 +227,9 @@ def main():
     # create neural net
     net = MLP1(hidden_size, activation_function=activ_func)
 
-    train(net, train_x, train_y, epochs, learning_rate, dev_x, dev_y)
+    params, best_acc = train(net, train_x, train_y, epochs, learning_rate, dev_x, dev_y)
+    print "The best accuracy is {}%".format(best_acc * 100)
+    net.set_params(params)
     predict_to_file(net, test_x, "test.pred")
 
 
