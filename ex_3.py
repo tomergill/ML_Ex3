@@ -36,10 +36,12 @@ def load_data_from_files(x_file, y_file, validation=False, validation_size=0.2, 
     return train_x, train_y, dev_x, dev_y
 
 
-def initialize_weight(size1, size2=None):
-    # n, m = size1, 1 if size2 is None else size2
-    # eps = np.sqrt(6.0 / (n + m))
-    # return np.random.uniform(-eps, eps, (size1, size2)) if size2 is not None else np.random.uniform(-eps, eps, size1)
+def initialize_weight(size1, size2=None, glorot=False):
+    if glorot:
+        n, m = size1, 1 if size2 is None else size2
+        eps = np.sqrt(6.0 / (n + m))
+        return np.random.uniform(-eps, eps, (size1, size2)) if size2 is not None else np.random.uniform(-eps, eps, size1)
+    # else
     return  np.random.uniform(-0.08, 0.08, (size1, size2)) if size2 is not None else np.random.uniform(-0.08, 0.08,
                                                                                                       size1)
 
@@ -79,11 +81,22 @@ def det_ReLU(x):
     return (x > 0).astype(np.float)
 
 
+def leaky_ReLU(x):
+    return np.maximum(x, 0.01 * x)
+
+
+def det_leaky_ReLU(x):
+    out = np.copy(x)
+    out[x > 0] = 1
+    out[x <= 0] = 0.01
+    return out
+
+
 def det_tanh(x):
     return 1 - np.square(tanh(x))
 
 
-func_to_derivative = {sigmoid: det_sigmoid, ReLU: det_ReLU, tanh: det_tanh}
+func_to_derivative = {sigmoid: det_sigmoid, ReLU: det_ReLU, tanh: det_tanh, leaky_ReLU: det_leaky_ReLU}
 
 
 def neglogloss(probs, y):
@@ -91,9 +104,9 @@ def neglogloss(probs, y):
 
 
 class MLP1:
-    def __init__(self, hidden_size, activation_function=ReLU, input_size=28 * 28, output_size=10):
-        self.W1, self.b1 = initialize_weight(hidden_size, input_size), initialize_weight(hidden_size)
-        self.W2, self.b2 = initialize_weight(output_size, hidden_size), initialize_weight(output_size)
+    def __init__(self, hidden_size, activation_function=ReLU, input_size=28 * 28, output_size=10, glorot=True):
+        self.W1, self.b1 = initialize_weight(hidden_size, input_size, glorot=glorot), initialize_weight(hidden_size, glorot=glorot)
+        self.W2, self.b2 = initialize_weight(output_size, hidden_size, glorot=glorot), initialize_weight(output_size, glorot=glorot)
         self.g = activation_function
 
     def forward(self, x, return_h=False):
@@ -213,7 +226,7 @@ def main():
     # Hyper-parameters
     hidden_size = 200  # 128  200 even better (89.518 over 20)
     learning_rate = 0.02
-    epochs = 30
+    epochs = 20
     activ_func = sigmoid
 
     # Load Data
@@ -225,7 +238,15 @@ def main():
     print "loaded data in {} seconds.\n".format(time() - t)
 
     # create neural net
-    net = MLP1(hidden_size, activation_function=activ_func)
+    net = MLP1(hidden_size, activation_function=activ_func, glorot=True)
+
+    # print hyper-params
+    print "hidden layer size = {}".format(hidden_size)
+    print "learning rate = {}".format(learning_rate)
+    print "# of epochs = {}".format(epochs)
+    print "activation function = {}".format(
+        {sigmoid: "sigmoid", tanh: "tanh", ReLU: "ReLU", leaky_ReLU: "leaky ReLU"}[activ_func])
+    print ""
 
     params, best_acc = train(net, train_x, train_y, epochs, learning_rate, dev_x, dev_y)
     print "The best accuracy is {}%".format(best_acc * 100)
