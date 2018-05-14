@@ -226,7 +226,7 @@ def main():
     # Hyper-parameters
     hidden_size = 200  # 128  200 even better (89.518 over 20)
     learning_rate = 0.02
-    epochs = 20
+    epochs = 30
     activ_func = sigmoid
 
     # Load Data
